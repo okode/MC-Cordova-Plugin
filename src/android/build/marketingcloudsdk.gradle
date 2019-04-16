@@ -26,6 +26,18 @@ dependencies {
     implementation 'com.android.support:support-v4:27.1.1'
 }
 
-ext.cdvPluginPostBuildExtras += {
-    apply plugin: com.google.gms.googleservices.GoogleServicesPlugin
-}
+cdvPluginPostBuildExtras.push({
+    // we use "AfterEvaluate" to check Gradle plugins when other plugins have already run its own 'postBuildExtras' hook
+    afterEvaluate {
+        def isGServicesPluginAlreadyApplied = false
+        def plugins = getPlugins()
+        if (plugins != null) {
+            isGServicesPluginAlreadyApplied = plugins.find { plugin ->
+                return plugin.toString().contains("com.google.gms.googleservices.GoogleServicesPlugin")
+            }
+        }
+        if (!isGServicesPluginAlreadyApplied) {
+            apply plugin: com.google.gms.googleservices.GoogleServicesPlugin
+        }
+    }
+})
