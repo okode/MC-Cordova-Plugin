@@ -112,9 +112,13 @@
             [configBuilder sfmc_setMarketingCloudServerUrl:tse];
         }
 
+        NSDictionary *dictionary = [[configBuilder sfmc_build] mutableCopy];
+        [dictionary setValue:[pluginSettings
+                              objectForKey:@"com.salesforce.marketingcloud.access_token"] forKey:@"accesstoken"];
+        
         NSError *configError = nil;
         if ([[MarketingCloudSDK sharedInstance]
-                sfmc_configureWithDictionary:[configBuilder sfmc_build]
+                sfmc_configureWithDictionary:dictionary
                                        error:&configError]) {
             [self setDelegate];
             [[MarketingCloudSDK sharedInstance] sfmc_addTag:@"Cordova"];
