@@ -56,7 +56,7 @@ public class MCCordovaPlugin extends CordovaPlugin {
   static final String TAG = "~!MCCordova";
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static Boolean IN_BACKGROUND = null;
+  private static boolean IN_BACKGROUND = true;
   private static CallbackContext eventsChannel = null;
   private PluginResult cachedNotificationOpenedResult = null;
   private boolean notificationOpenedSubscribed = false;
@@ -84,6 +84,7 @@ public class MCCordovaPlugin extends CordovaPlugin {
   @Override public void initialize(CordovaInterface cordova, CordovaWebView webView) {
     handleNotificationMessage(
         NotificationManager.extractMessage(cordova.getActivity().getIntent()));
+    IN_BACKGROUND = false;
   }
 
   @Override public void onNewIntent(Intent intent) {
@@ -93,15 +94,15 @@ public class MCCordovaPlugin extends CordovaPlugin {
 
   @Override
   public void onPause(boolean multitasking) {
-    MCCordovaPlugin.IN_BACKGROUND = true;
+    IN_BACKGROUND = true;
   }
 
   @Override
   public void onResume(boolean multitasking) {
-    MCCordovaPlugin.IN_BACKGROUND = false;
+    IN_BACKGROUND = false;
   }
 
-  public static Boolean isInBackground() { return MCCordovaPlugin.IN_BACKGROUND; }
+  public static boolean isInBackground() { return IN_BACKGROUND; }
 
   public static void sendForegroundNotificationReceivedEvent(RemoteMessage message) {
     sendNotificationReceivedEvent("foregroundNotificationReceived", message);
