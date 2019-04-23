@@ -311,7 +311,12 @@ var MCCordovaPlugin = {
     handleNotification: function(notification, successCallback, errorCallback) {
         argsCheck.checkArgs(
             'off', PLUGIN_NAME + '.handleNotification', arguments);
-        _exec(successCallback, errorCallback, 'handleNotification', [notification]);
+        if (device.platform == 'Android') {
+            var stringifiedNotification = notification ? JSON.stringify(notification) : null;
+            _exec(successCallback, errorCallback, 'handleNotification', [stringifiedNotification]);
+        } else {
+            _exec(successCallback, errorCallback, 'handleNotification', [notification]);
+        }
     }
 
     /**

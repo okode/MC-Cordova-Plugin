@@ -28,6 +28,7 @@ package com.salesforce.marketingcloud.cordova;
 import android.content.Intent;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.util.Log;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.firebase.messaging.RemoteMessage;
@@ -37,6 +38,7 @@ import com.salesforce.marketingcloud.messages.push.PushMessageManager;
 import com.salesforce.marketingcloud.notifications.NotificationManager;
 import com.salesforce.marketingcloud.notifications.NotificationMessage;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -91,12 +93,12 @@ public class MCCordovaPlugin extends CordovaPlugin {
 
   @Override
   public void onPause(boolean multitasking) {
-    MCCordovaPlugin.IN_BACKGROUND = false;
+    MCCordovaPlugin.IN_BACKGROUND = true;
   }
 
   @Override
   public void onResume(boolean multitasking) {
-    MCCordovaPlugin.IN_BACKGROUND = true;
+    MCCordovaPlugin.IN_BACKGROUND = false;
   }
 
   public static Boolean isInBackground() { return MCCordovaPlugin.IN_BACKGROUND; }
@@ -407,16 +409,28 @@ public class MCCordovaPlugin extends CordovaPlugin {
     return new ActionHandler() {
       @Override
       public void execute(MarketingCloudSdk sdk, JSONArray args, CallbackContext callbackContext) {
-        JSONObject notification = args.optJSONObject(0);
-        JSONObject data = notification != null ? notification.optJSONObject("data"): null;
+        String data = args.optString(0, null);
+        Map<String, Object> notification = null;
+        try {
+          notification = data != null ? MAPPER.readValue(data, HashMap.class) : null;
+        } catch (IOException e) {
+          Log.e(TAG, "Error reading notification value", e);
+        }
 
-        if (data == null) {
-          callbackContext.error("Invalid notification data");
+        if (notification == null) {
+          callbackContext.error("Invalid notification");
           return;
         }
 
-        Map<String, String> parsedNotification = MAPPER.convertValue(notification, HashMap.class);
-        boolean handled = sdk.getPushMessageManager().handleMessage(parsedNotification);
+
+        Object notificationData = notification.get("data");
+        if (!(notificationData instanceof Map)) {
+          callbackContext.error("No valid notification data");
+          return;
+        }
+
+        boolean handled = sdk.getPushMessageManager()
+                .handleMessage((Map<String, String>) notificationData);
         if (handled) {
           callbackContext.success("Salesforce notification handled");
         } else {
