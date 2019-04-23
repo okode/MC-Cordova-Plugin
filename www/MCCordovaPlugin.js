@@ -310,7 +310,7 @@ var MCCordovaPlugin = {
      */
     handleNotification: function(notification, successCallback, errorCallback) {
         argsCheck.checkArgs(
-            'f', PLUGIN_NAME + '.handleNotification', arguments);
+            'off', PLUGIN_NAME + '.handleNotification', arguments);
         _exec(successCallback, errorCallback, 'handleNotification', [notification]);
     }
 
