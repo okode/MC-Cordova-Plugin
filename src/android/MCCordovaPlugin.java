@@ -54,7 +54,7 @@ public class MCCordovaPlugin extends CordovaPlugin {
   static final String TAG = "~!MCCordova";
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static boolean IN_FOREGROUND = true;
+  private static Boolean IN_BACKGROUND = null;
   private static CallbackContext eventsChannel = null;
   private PluginResult cachedNotificationOpenedResult = null;
   private boolean notificationOpenedSubscribed = false;
@@ -91,15 +91,15 @@ public class MCCordovaPlugin extends CordovaPlugin {
 
   @Override
   public void onPause(boolean multitasking) {
-    MCCordovaPlugin.IN_FOREGROUND = false;
+    MCCordovaPlugin.IN_BACKGROUND = false;
   }
 
   @Override
   public void onResume(boolean multitasking) {
-    MCCordovaPlugin.IN_FOREGROUND = true;
+    MCCordovaPlugin.IN_BACKGROUND = true;
   }
 
-  public static boolean isInForeground() { return MCCordovaPlugin.IN_FOREGROUND; }
+  public static Boolean isInBackground() { return MCCordovaPlugin.IN_BACKGROUND; }
 
   public static void sendForegroundNotificationReceivedEvent(RemoteMessage message) {
     sendNotificationReceivedEvent("foregroundNotificationReceived", message);
