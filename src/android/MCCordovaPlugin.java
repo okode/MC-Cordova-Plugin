@@ -116,7 +116,8 @@ public class MCCordovaPlugin extends CordovaPlugin {
     try {
       JSONObject eventArgs = new JSONObject();
       eventArgs.put("type", type);
-      eventArgs.put("data", message.getData());
+      Map<String, String> messageData = message.getData();
+      eventArgs.put("data", messageData != null ? new JSONObject(messageData) : null);
       PluginResult result = new PluginResult(PluginResult.Status.OK, eventArgs);
       result.setKeepCallback(true);
       eventsChannel.sendPluginResult(result);
@@ -409,28 +410,24 @@ public class MCCordovaPlugin extends CordovaPlugin {
     return new ActionHandler() {
       @Override
       public void execute(MarketingCloudSdk sdk, JSONArray args, CallbackContext callbackContext) {
-        String data = args.optString(0, null);
-        Map<String, Object> notification = null;
-        try {
-          notification = data != null ? MAPPER.readValue(data, HashMap.class) : null;
-        } catch (IOException e) {
-          Log.e(TAG, "Error reading notification value", e);
+        JSONObject notification = args.optJSONObject(0);
+        JSONObject notificationData = notification != null ? notification.optJSONObject("data"): null;
+        Map<String, String> notificationDataMap = null;
+
+        if (notificationData != null) {
+          try {
+            notificationDataMap = MAPPER.readValue(notificationData.toString(), HashMap.class);
+          } catch (IOException e) {
+            Log.e(TAG, "Error reading notification data", e);
+          }
         }
 
-        if (notification == null) {
-          callbackContext.error("Invalid notification");
-          return;
-        }
-
-
-        Object notificationData = notification.get("data");
-        if (!(notificationData instanceof Map)) {
+        if (notificationDataMap == null) {
           callbackContext.error("No valid notification data");
           return;
         }
 
-        boolean handled = sdk.getPushMessageManager()
-                .handleMessage((Map<String, String>) notificationData);
+        boolean handled = sdk.getPushMessageManager().handleMessage(notificationDataMap);
         if (handled) {
           callbackContext.success("Salesforce notification handled");
         } else {
