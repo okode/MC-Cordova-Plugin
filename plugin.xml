@@ -48,7 +48,7 @@
       <service
           android:name="com.salesforce.marketingcloud.cordova.MCPluginFirebaseMessagingService"
           android:exported="false" >
-          <intent-filter android:priority="9999" >
+          <intent-filter android:priority="9" >
               <action android:name="com.google.firebase.MESSAGING_EVENT" />
           </intent-filter>
       </service>
