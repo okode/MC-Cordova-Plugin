@@ -8,12 +8,12 @@ public class MCPluginFirebaseMessagingService extends MCFirebaseMessagingService
 
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
-        if (MCCordovaPlugin.IN_BACKGROUND) {
+        if (MCCordovaPlugin.isInForeground()) {
+            MCCordovaPlugin.sendForegroundNotificationReceivedEvent(remoteMessage);
+        } else {
             MCCordovaPlugin.sendBackgroundNotificationReceivedEvent(remoteMessage);
             MarketingCloudSdk.requestSdk(
                     sdk -> sdk.getPushMessageManager().handleMessage(remoteMessage));
-        } else {
-            MCCordovaPlugin.sendForegroundNotificationReceivedEvent(remoteMessage);
         }
     }
 

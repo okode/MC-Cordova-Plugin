@@ -52,9 +52,9 @@ import org.json.JSONObject;
 public class MCCordovaPlugin extends CordovaPlugin {
 
   static final String TAG = "~!MCCordova";
-  static boolean IN_BACKGROUND = true;
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static boolean IN_FOREGROUND = true;
   private static CallbackContext eventsChannel = null;
   private PluginResult cachedNotificationOpenedResult = null;
   private boolean notificationOpenedSubscribed = false;
@@ -91,14 +91,15 @@ public class MCCordovaPlugin extends CordovaPlugin {
 
   @Override
   public void onPause(boolean multitasking) {
-    MCCordovaPlugin.IN_BACKGROUND= true;
+    MCCordovaPlugin.IN_FOREGROUND = false;
   }
 
   @Override
   public void onResume(boolean multitasking) {
-    MCCordovaPlugin.IN_BACKGROUND = false;
+    MCCordovaPlugin.IN_FOREGROUND = true;
   }
 
+  public static boolean isInForeground() { return MCCordovaPlugin.IN_FOREGROUND; }
 
   public static void sendForegroundNotificationReceivedEvent(RemoteMessage message) {
     sendNotificationReceivedEvent("foregroundNotificationReceived", message);
@@ -409,10 +410,18 @@ public class MCCordovaPlugin extends CordovaPlugin {
         JSONObject notification = args.optJSONObject(0);
         JSONObject data = notification != null ? notification.optJSONObject("data"): null;
 
-        if (data == null) { return; }
+        if (data == null) {
+          callbackContext.error("Invalid notification data");
+          return;
+        }
 
         Map<String, String> parsedNotification = MAPPER.convertValue(notification, HashMap.class);
-        sdk.getPushMessageManager().handleMessage(parsedNotification);
+        boolean handled = sdk.getPushMessageManager().handleMessage(parsedNotification);
+        if (handled) {
+          callbackContext.success("Salesforce notification handled");
+        } else {
+          callbackContext.error("Error handling notification");
+        }
       }
     };
   }

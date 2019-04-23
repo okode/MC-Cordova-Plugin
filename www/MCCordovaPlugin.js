@@ -301,6 +301,17 @@ var MCCordovaPlugin = {
         argsCheck.checkArgs(
             'f', PLUGIN_NAME + '.setOnBackgroundNotificationReceivedListener', arguments);
         onBackgroundNotificationReceived = listener;
+    },
+
+    /**
+     *
+     * @param {Object} notification Notification event
+     * @since 6.1.0
+     */
+    handleNotification: function(notification, successCallback, errorCallback) {
+        argsCheck.checkArgs(
+            'f', PLUGIN_NAME + '.handleNotification', arguments);
+        _exec(successCallback, errorCallback, 'handleNotification', [notification]);
     }
 
     /**
