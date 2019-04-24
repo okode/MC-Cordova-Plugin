@@ -64,6 +64,12 @@
         <param name="onload" value="true" />
       </feature>
     </config-file>
+    <!-- Background push -->
+    <config-file parent="UIBackgroundModes" target="*-Info.plist">
+        <array>
+            <string>remote-notification</string>
+        </array>
+    </config-file>
     <header-file src="src/ios/AppDelegate+MCCordovaPlugin.h" />
     <source-file src="src/ios/AppDelegate+MCCordovaPlugin.m" />
     <header-file src="src/ios/MCCordovaPlugin.h" />

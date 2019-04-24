@@ -26,13 +26,14 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #import "MCCordovaPlugin.h"
-#import "MarketingCloudSDK/MarketingCloudSDK.h"
 
 @implementation MCCordovaPlugin
 
 @synthesize eventsCallbackId;
 @synthesize notificationOpenedSubscribed;
 @synthesize cachedNotification;
+
+static MCCordovaPlugin *instance;
 
 + (NSMutableDictionary *_Nullable)dataForNotificationReceived:(NSNotification *)notification {
     NSMutableDictionary *notificationData = nil;
@@ -52,42 +53,11 @@
             notificationData = [userNotificationUserInfo mutableCopy];
         }
     }
-
-    if (notificationData != nil) {
-        if([notificationData[@"aps"] objectForKey:@"content-available"] != nil) {
-            // Making the same assumption as the SDK would here.
-            // if silent push, bail out so that the data is not returned as "notification opened"
-            return nil;
-        }
-        NSString *alert = nil;
-        NSString *title = nil;
-        NSString *subtitle = nil;
-        if ([notificationData[@"aps"][@"alert"] isKindOfClass:[NSString class]]) {
-            alert = notificationData[@"aps"][@"alert"];
-        } else if ([notificationData[@"aps"][@"alert"] isKindOfClass:[NSDictionary class]]) {
-            // if not a silent push, pull out the rest of the alert values
-            if ([notificationData[@"aps"][@"alert"] isEqualToDictionary:@{}] == NO) {
-                alert = notificationData[@"aps"][@"alert"][@"body"];
-                title = notificationData[@"aps"][@"alert"][@"title"];
-                subtitle = notificationData[@"aps"][@"alert"][@"subtitle"];
-            }
-        }
-        if (alert != nil) {
-            [notificationData setValue:alert forKey:@"alert"];
-        }
-        if (title != nil) {
-            [notificationData setValue:title forKey:@"title"];
-        }
-        if (subtitle != nil) {
-            [notificationData setValue:subtitle forKey:@"subtitle"];
-        }
-        [notificationData removeObjectForKey:@"aps"];
-    }
-
     return notificationData;
 }
 
 - (void)pluginInitialize {
+    instance = self;
     if ([MarketingCloudSDK sharedInstance] == nil) {
         // failed to access the MarketingCloudSDK
         os_log_error(OS_LOG_DEFAULT, "Failed to access the MarketingCloudSDK");
@@ -161,6 +131,60 @@
     }
 }
 
++ (void)sendForegroundNotificationReceived:(NSDictionary*)notificationUserInfo {
+    [MCCordovaPlugin sendNotificationReceived:notificationUserInfo withType:@"foregroundNotificationReceived"];
+}
+
++ (void)sendBackgroundNotificationReceived:(NSDictionary*)notificationUserInfo {
+    [MCCordovaPlugin sendNotificationReceived:notificationUserInfo withType:@"backgroundNotificationReceived"];
+}
+
++ (void)sendNotificationReceived:(NSDictionary*)notificationUserInfo withType:(NSString*)type {
+    MCCordovaPlugin *plugin = instance;
+    if (plugin.eventsCallbackId == nil) { return; }
+    NSDictionary *event = @{ @"type" : type, @"data": notificationUserInfo };
+    CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                                            messageAsDictionary:event];
+    [result setKeepCallbackAsBool:YES];
+    [plugin.commandDelegate sendPluginResult:result callbackId:plugin.eventsCallbackId];
+}
+
++ (BOOL)isSilentPush:(NSDictionary *)notificationUserInfo {
+    NSDictionary *apsDict = [notificationUserInfo objectForKey:@"aps"];
+    if (apsDict) {
+        id badgeNumber = [apsDict objectForKey:@"badge"];
+        NSString *soundName = [apsDict objectForKey:@"sound"];
+
+        if (badgeNumber || soundName.length) {
+            return NO;
+        }
+
+        if ([MCCordovaPlugin isAlertingPush:notificationUserInfo]) {
+            return NO;
+        }
+    }
+
+    return YES;
+}
+
++ (BOOL)isAlertingPush:(NSDictionary *)notification {
+    NSDictionary *apsDict = [notification objectForKey:@"aps"];
+    id alert = [apsDict objectForKey:@"alert"];
+    if ([alert isKindOfClass:[NSDictionary class]]) {
+        if ([alert[@"body"] length]) {
+            return YES;
+        }
+
+        if ([alert[@"loc-key"] length]) {
+            return YES;
+        }
+    } else if ([alert isKindOfClass:[NSString class]] && [alert length]) {
+        return YES;
+    }
+
+    return NO;
+}
+
 - (void)sendNotificationEvent:(NSDictionary *)notification {
     if (self.notificationOpenedSubscribed && self.eventsCallbackId != nil) {
         CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
@@ -214,6 +238,40 @@
         [[UIApplication sharedApplication] registerForRemoteNotifications];
     }
 }
+
+- (void)handleNotification:(CDVInvokedUrlCommand *)command {
+    NSDictionary *notification = [command.arguments objectAtIndex:0];
+    if ([notification objectForKey:@"data"] == nil || [[notification objectForKey:@"data"] objectForKey:@"aps"] == nil ) {
+        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR]
+                                    callbackId:command.callbackId];
+        return;
+    }
+    NSDictionary *notificationData = notification[@"data"];
+    UNMutableNotificationContent *pushContent = [[UNMutableNotificationContent alloc] init];
+    if ([notificationData[@"aps"][@"alert"] isKindOfClass:[NSString class]]) {
+        pushContent.body = notificationData[@"aps"][@"alert"];
+    } else if ([notificationData[@"aps"][@"alert"] isKindOfClass:[NSDictionary class]]) {
+        pushContent.title = notificationData[@"aps"][@"alert"][@"title"];
+        pushContent.subtitle = notificationData[@"aps"][@"alert"][@"subtitle"];
+        pushContent.body = notificationData[@"aps"][@"alert"][@"body"];
+    }
+    pushContent.sound = [UNNotificationSound defaultSound];
+    pushContent.userInfo = notificationData;
+    UNNotificationRequest *pushReq = [UNNotificationRequest requestWithIdentifier:@"MC_HANDLED_PUSH"
+                                         content:pushContent
+                                         trigger:[UNTimeIntervalNotificationTrigger triggerWithTimeInterval:1 repeats:false]];
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center addNotificationRequest:pushReq withCompletionHandler:^(NSError * _Nullable error) {
+        if (error != nil) {
+            [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
+                                                    messageAsString:@"Error presenting notification"]
+                                        callbackId:command.callbackId];
+        }
+        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK]
+                                    callbackId:command.callbackId];
+    }];
+}
+
 
 - (void)enableVerboseLogging:(CDVInvokedUrlCommand *)command {
     [[MarketingCloudSDK sharedInstance] sfmc_setDebugLoggingEnabled:YES];

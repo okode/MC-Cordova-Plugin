@@ -28,6 +28,7 @@
 #import <Cordova/CDV.h>
 #import <Cordova/CDVPlugin.h>
 #import <UIKit/UIKit.h>
+#import "MarketingCloudSDK/MarketingCloudSDK.h"
 
 @interface MCCordovaPlugin : CDVPlugin
 
@@ -52,6 +53,12 @@
 
 - (void)registerEventsChannel:(CDVInvokedUrlCommand *)command;
 - (void)subscribe:(CDVInvokedUrlCommand *)command;
+
+- (void)handleNotification:(CDVInvokedUrlCommand *)command;
+
++ (void)sendForegroundNotificationReceived:(NSDictionary*)notificationUserInfo;
++ (void)sendBackgroundNotificationReceived:(NSDictionary*)notificationUserInfo;
++ (BOOL)isSilentPush:(NSDictionary *)notificationUserInfo;
 
 @property(nonatomic, copy) NSString *eventsCallbackId;
 @property(nonatomic, assign) BOOL notificationOpenedSubscribed;

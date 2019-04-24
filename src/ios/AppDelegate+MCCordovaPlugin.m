@@ -33,6 +33,43 @@
 
 @implementation AppDelegate (MCCordovaPlugin)
 
+// its dangerous to override a method from within a category.
+// Instead we will use method swizzling. we set this up in the load call.
++ (void)load
+{
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class class = [self class];
+
+        SEL originalSelector = @selector(shouldAutorotate);
+        SEL swizzledSelector = @selector(pluginSwizzledInit);
+
+        Method originalMethod = class_getInstanceMethod(class, originalSelector);
+        Method swizzledMethod = class_getInstanceMethod(class, swizzledSelector);
+
+        BOOL didAddMethod = class_addMethod(class,
+                                            originalSelector,
+                                            method_getImplementation(swizzledMethod),
+                                            method_getTypeEncoding(swizzledMethod));
+
+        if (didAddMethod) {
+            class_replaceMethod(class,
+                                swizzledSelector,
+                                method_getImplementation(originalMethod),
+                                method_getTypeEncoding(originalMethod));
+        } else {
+            method_exchangeImplementations(originalMethod, swizzledMethod);
+        }
+    });
+}
+
+- (AppDelegate *)pluginSwizzledInit
+{
+    // This actually calls the original init method over in AppDelegate. Equivilent to calling super
+    // on an overrided method, this is not recursive, although it appears that way.
+    return [self pluginSwizzledInit];
+}
+
 - (void)sfmc_setNotificationDelegate {
     if (@available(iOS 10, *)) {
         [UNUserNotificationCenter currentNotificationCenter].delegate = self;
@@ -40,38 +77,42 @@
 }
 
 - (void)application:(UIApplication *)application
-    didReceiveRemoteNotification:(NSDictionary *)userInfo
-          fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
-    if (@available(iOS 10, *)) {
-        UNMutableNotificationContent *theSilentPushContent =
-            [[UNMutableNotificationContent alloc] init];
-        theSilentPushContent.userInfo = userInfo;
-        UNNotificationRequest *theSilentPushRequest =
-            [UNNotificationRequest requestWithIdentifier:[NSUUID UUID].UUIDString
-                                                 content:theSilentPushContent
-                                                 trigger:nil];
+didReceiveRemoteNotification:(NSDictionary *)userInfo
+fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
+    switch(application.applicationState) {
+        case UIApplicationStateActive:
+            if (![MCCordovaPlugin isSilentPush:userInfo]) {
+                // Handled by the userNotificationCenter:willPresentNotification:withCompletionHandler:
+                completionHandler(UIBackgroundFetchResultNoData);
+                return;
+            }
 
-        [[MarketingCloudSDK sharedInstance] sfmc_setNotificationRequest:theSilentPushRequest];
-    } else {
-        [[MarketingCloudSDK sharedInstance] sfmc_setNotificationUserInfo:userInfo];
+            // Foreground push
+            [MCCordovaPlugin sendForegroundNotificationReceived:userInfo];
+            break;
+
+        case UIApplicationStateBackground:
+        case UIApplicationStateInactive:
+            // Background push
+            [MCCordovaPlugin sendBackgroundNotificationReceived:userInfo];
+            break;
     }
-    completionHandler(UIBackgroundFetchResultNewData);
 }
 
 - (void)application:(UIApplication *)application
-    didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
     // save the device token
     [[MarketingCloudSDK sharedInstance] sfmc_setDeviceToken:deviceToken];
 }
 
 - (void)application:(UIApplication *)application
-    didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
     os_log_debug(OS_LOG_DEFAULT, "didFailToRegisterForRemoteNotificationsWithError = %@", error);
 }
 
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
-    didReceiveNotificationResponse:(UNNotificationResponse *)response
-             withCompletionHandler:(void (^)(void))completionHandler {
+didReceiveNotificationResponse:(UNNotificationResponse *)response
+         withCompletionHandler:(void (^)(void))completionHandler {
     // tell the MarketingCloudSDK about the notification
     [[MarketingCloudSDK sharedInstance] sfmc_setNotificationRequest:response.notification.request];
 
@@ -83,9 +124,18 @@
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
        willPresentNotification:(UNNotification *)notification
          withCompletionHandler:
-             (void (^)(UNNotificationPresentationOptions options))completionHandler {
-    if (completionHandler != nil) {
-        completionHandler(UNNotificationPresentationOptionAlert);
+(void (^)(UNNotificationPresentationOptions options))completionHandler {
+    NSDictionary *userInfo = [notification request].content.userInfo;
+    if ([MCCordovaPlugin isSilentPush:userInfo]) {
+        // Already notified by 'didReceiveRemoteNotifications'
+        completionHandler(UNNotificationPresentationOptionNone);
+    } else {
+        if ([notification.request.identifier isEqualToString:@"MC_HANDLED_PUSH"]) {
+            completionHandler(UNNotificationPresentationOptionAlert | UNNotificationPresentationOptionBadge | UNNotificationPresentationOptionSound);
+        } else {
+            [MCCordovaPlugin sendForegroundNotificationReceived:userInfo];
+            completionHandler(UNNotificationPresentationOptionNone);
+        }
     }
 }
 
@@ -96,7 +146,7 @@
                                alertText:(NSString *)alertText {
     NSLog(@"### USERINFO: %@", userInfo);
     NSLog(@"### alertText: %@", alertText);
-
+    
     [[NSNotificationCenter defaultCenter] postNotificationName:@"kCDVPushReceivedNotification"
                                                         object:self
                                                       userInfo:nil];
