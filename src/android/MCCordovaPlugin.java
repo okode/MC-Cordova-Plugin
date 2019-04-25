@@ -118,7 +118,12 @@ public class MCCordovaPlugin extends CordovaPlugin {
       JSONObject eventArgs = new JSONObject();
       eventArgs.put("type", type);
       Map<String, String> messageData = message.getData();
-      eventArgs.put("data", messageData != null ? new JSONObject(messageData) : null);
+      if (messageData != null) {
+        eventArgs.put("message", messageData.get("alert"));
+        eventArgs.put("sfcmType", messageData.get("_m"));
+        eventArgs.put("extras", new JSONObject(messageData));
+      }
+      eventArgs.put("timestamp", System.currentTimeMillis());
       PluginResult result = new PluginResult(PluginResult.Status.OK, eventArgs);
       result.setKeepCallback(true);
       eventsChannel.sendPluginResult(result);
@@ -150,8 +155,12 @@ public class MCCordovaPlugin extends CordovaPlugin {
             values.put("type", "openDirect");
             break;
         }
-        eventArgs.put("values", values);
+
         eventArgs.put("type", "notificationOpened");
+        eventArgs.put("message", message.alert());
+        eventArgs.put("sfcmType", message.payload().get("_m"));
+        eventArgs.put("extras", values);
+        eventArgs.put("timestamp", System.currentTimeMillis());
 
         result = new PluginResult(PluginResult.Status.OK, eventArgs);
         result.setKeepCallback(true);
@@ -412,7 +421,7 @@ public class MCCordovaPlugin extends CordovaPlugin {
       @Override
       public void execute(MarketingCloudSdk sdk, JSONArray args, CallbackContext callbackContext) {
         JSONObject notification = args.optJSONObject(0);
-        JSONObject notificationData = notification != null ? notification.optJSONObject("data"): null;
+        JSONObject notificationData = notification != null ? notification.optJSONObject("extras"): null;
         Map<String, String> notificationDataMap = null;
 
         if (notificationData != null) {
