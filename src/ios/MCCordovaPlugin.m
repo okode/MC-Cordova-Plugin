@@ -119,34 +119,51 @@ static MCCordovaPlugin *instance;
                               [userInfo setValue:url forKey:@"url"];
                           }
                           [userInfo setValue:type forKey:@"type"];
-
-                          [self sendNotificationEvent:@{
-                              @"timeStamp" : [NSNumber
-                                  numberWithLong:([[NSDate date] timeIntervalSince1970] * 1000)],
-                              @"values" : userInfo,
-                              @"type" : @"notificationOpened"
-                          }];
+                          [self sendNotificationOpenedEvent:userInfo];
                       }
                     }];
     }
 }
 
 + (void)sendForegroundNotificationReceived:(NSDictionary*)notificationUserInfo {
-    [MCCordovaPlugin sendNotificationReceived:notificationUserInfo withType:@"foregroundNotificationReceived"];
+    [MCCordovaPlugin sendNotificationEvent:notificationUserInfo withType:@"foregroundNotificationReceived"];
 }
 
 + (void)sendBackgroundNotificationReceived:(NSDictionary*)notificationUserInfo {
-    [MCCordovaPlugin sendNotificationReceived:notificationUserInfo withType:@"backgroundNotificationReceived"];
+    [MCCordovaPlugin sendNotificationEvent:notificationUserInfo withType:@"backgroundNotificationReceived"];
 }
 
-+ (void)sendNotificationReceived:(NSDictionary*)notificationUserInfo withType:(NSString*)type {
++ (void)sendNotificationEvent:(NSDictionary*)notificationUserInfo withType:(NSString*)type {
     MCCordovaPlugin *plugin = instance;
     if (plugin.eventsCallbackId == nil) { return; }
-    NSDictionary *event = @{ @"type" : type, @"data": notificationUserInfo };
+    NSString *notificationMessage = [MCCordovaPlugin getNotificationMessage: notificationUserInfo];
+    NSString *sfcmType = [MCCordovaPlugin getNotificationSFCMType: notificationUserInfo];
+    NSDictionary *event = @{
+                            @"type" : type,
+                            @"message": notificationMessage ? notificationMessage : [NSNull null],
+                            @"sfcmType": sfcmType ? sfcmType : [NSNull null],
+                            @"extras": notificationUserInfo,
+                            @"timestamp": [NSNumber
+                                           numberWithLong:([[NSDate date] timeIntervalSince1970] * 1000)]
+                            };
     CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                                             messageAsDictionary:event];
     [result setKeepCallbackAsBool:YES];
     [plugin.commandDelegate sendPluginResult:result callbackId:plugin.eventsCallbackId];
+}
+
++ (NSString*) getNotificationMessage:(NSDictionary*)notificationUserInfo {
+    NSString *message = nil;
+    if ([notificationUserInfo[@"aps"][@"alert"] isKindOfClass:[NSString class]]) {
+        message = notificationUserInfo[@"aps"][@"alert"];
+    } else if ([notificationUserInfo[@"aps"][@"alert"] isKindOfClass:[NSDictionary class]]) {
+        message = notificationUserInfo[@"aps"][@"alert"][@"body"];
+    }
+    return message;
+}
+
++ (NSString*) getNotificationSFCMType:(NSDictionary*)notificationUserInfo {
+    return notificationUserInfo[@"_m"];
 }
 
 + (BOOL)isSilentPush:(NSDictionary *)notificationUserInfo {
@@ -185,14 +202,11 @@ static MCCordovaPlugin *instance;
     return NO;
 }
 
-- (void)sendNotificationEvent:(NSDictionary *)notification {
-    if (self.notificationOpenedSubscribed && self.eventsCallbackId != nil) {
-        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
-                                                messageAsDictionary:notification];
-        [result setKeepCallbackAsBool:YES];
-        [self.commandDelegate sendPluginResult:result callbackId:self.eventsCallbackId];
+- (void)sendNotificationOpenedEvent:(NSDictionary *)userInfo {
+    if (self.notificationOpenedSubscribed) {
+        [MCCordovaPlugin sendNotificationEvent:userInfo withType:@"notificationOpened"];
     } else {
-        self.cachedNotification = notification;
+        self.cachedNotification = userInfo;
     }
 }
 
@@ -241,13 +255,13 @@ static MCCordovaPlugin *instance;
 
 - (void)handleNotification:(CDVInvokedUrlCommand *)command {
     NSDictionary *notification = [command.arguments objectAtIndex:0];
-    if ([notification objectForKey:@"data"] == nil) {
+    if ([notification objectForKey:@"extras"] == nil) {
         [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR]
                                     callbackId:command.callbackId];
         return;
     }
 
-    NSDictionary *notificationData = notification[@"data"];
+    NSDictionary *notificationData = notification[@"extras"];
 
     // Building local notification payload
     UNMutableNotificationContent *pushContent = [[UNMutableNotificationContent alloc] init];
@@ -421,7 +435,7 @@ static MCCordovaPlugin *instance;
 
 - (void)sendCachedNotification {
     if (self.cachedNotification != nil) {
-        [self sendNotificationEvent:self.cachedNotification];
+        [self sendNotificationOpenedEvent:self.cachedNotification];
         self.cachedNotification = nil;
     }
 }
