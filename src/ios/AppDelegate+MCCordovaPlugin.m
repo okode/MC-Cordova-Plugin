@@ -81,22 +81,23 @@ didReceiveRemoteNotification:(NSDictionary *)userInfo
 fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
     switch(application.applicationState) {
         case UIApplicationStateActive:
-            if (![MCCordovaPlugin isSilentPush:userInfo]) {
-                // Handled by the userNotificationCenter:willPresentNotification:withCompletionHandler:
-                completionHandler(UIBackgroundFetchResultNoData);
-                return;
+            if (@available(iOS 10, *)) {
+                if (![MCCordovaPlugin isSilentPush:userInfo]) {
+                    // Handled by the userNotificationCenter:willPresentNotification:withCompletionHandler:
+                    completionHandler(UIBackgroundFetchResultNoData);
+                    return;
+                }
             }
-
-            // Foreground push
+            // Foreground push on iOS 9 or lower, or silent push
             [MCCordovaPlugin sendForegroundNotificationReceived:userInfo];
             break;
-
         case UIApplicationStateBackground:
         case UIApplicationStateInactive:
             // Background push
             [MCCordovaPlugin sendBackgroundNotificationReceived:userInfo];
             break;
     }
+    completionHandler(UIBackgroundFetchResultNewData);
 }
 
 - (void)application:(UIApplication *)application
@@ -125,17 +126,14 @@ didReceiveNotificationResponse:(UNNotificationResponse *)response
        willPresentNotification:(UNNotification *)notification
          withCompletionHandler:
 (void (^)(UNNotificationPresentationOptions options))completionHandler {
-    NSDictionary *userInfo = [notification request].content.userInfo;
-    if ([MCCordovaPlugin isSilentPush:userInfo]) {
-        // Already notified by 'didReceiveRemoteNotifications'
+    NSDictionary *userInfo = notification.request.content.userInfo;
+    if ([notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class]) {
+        // Developer is who decides if the notification will be presented from Cordova context
+        [MCCordovaPlugin sendForegroundNotificationReceived:userInfo];
         completionHandler(UNNotificationPresentationOptionNone);
     } else {
-        if ([notification.request.identifier isEqualToString:@"MC_HANDLED_PUSH"]) {
-            completionHandler(UNNotificationPresentationOptionAlert | UNNotificationPresentationOptionBadge | UNNotificationPresentationOptionSound);
-        } else {
-            [MCCordovaPlugin sendForegroundNotificationReceived:userInfo];
-            completionHandler(UNNotificationPresentationOptionNone);
-        }
+        // Push notification presented by handling it from Cordova project
+        completionHandler(UNNotificationPresentationOptionAlert | UNNotificationPresentationOptionBadge | UNNotificationPresentationOptionSound);
     }
 }
 

@@ -241,12 +241,15 @@ static MCCordovaPlugin *instance;
 
 - (void)handleNotification:(CDVInvokedUrlCommand *)command {
     NSDictionary *notification = [command.arguments objectAtIndex:0];
-    if ([notification objectForKey:@"data"] == nil || [[notification objectForKey:@"data"] objectForKey:@"aps"] == nil ) {
+    if ([notification objectForKey:@"data"] == nil) {
         [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR]
                                     callbackId:command.callbackId];
         return;
     }
+
     NSDictionary *notificationData = notification[@"data"];
+
+    // Building local notification payload
     UNMutableNotificationContent *pushContent = [[UNMutableNotificationContent alloc] init];
     if ([notificationData[@"aps"][@"alert"] isKindOfClass:[NSString class]]) {
         pushContent.body = notificationData[@"aps"][@"alert"];
@@ -255,8 +258,14 @@ static MCCordovaPlugin *instance;
         pushContent.subtitle = notificationData[@"aps"][@"alert"][@"subtitle"];
         pushContent.body = notificationData[@"aps"][@"alert"][@"body"];
     }
-    pushContent.sound = [UNNotificationSound defaultSound];
+    if (notificationData[@"aps"][@"badge"] != nil) {
+        pushContent.badge = notificationData[@"aps"][@"badge"];
+    }
+    if (notificationData[@"aps"][@"sound"] != nil) {
+        pushContent.sound = [UNNotificationSound soundNamed:notificationData[@"aps"][@"sound"]];
+    }
     pushContent.userInfo = notificationData;
+
     UNNotificationRequest *pushReq = [UNNotificationRequest requestWithIdentifier:@"MC_HANDLED_PUSH"
                                          content:pushContent
                                          trigger:[UNTimeIntervalNotificationTrigger triggerWithTimeInterval:1 repeats:false]];
