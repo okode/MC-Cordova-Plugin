@@ -518,11 +518,7 @@ void ApplicationDidReceiveRemoteNotificationFetchCompletionHandler(id self,
                                                                    UIApplication *application,
                                                                    NSDictionary *userInfo,
                                                                    void (^completionHandler)(UIBackgroundFetchResult)) {
-    IMP original = [instance.appDelegateSwizzler originalImplementation:_cmd];
-    if (original) {
-        ((void(*)(id, SEL, UIApplication *, NSDictionary *, void (^)(UIBackgroundFetchResult)))original)(self, _cmd, application, userInfo, completionHandler);
-    }
-    
+    // We don't invoke the original implementation of this method because other push plugins have issues on notifications handling
     switch(application.applicationState) {
         case UIApplicationStateActive:
             if (@available(iOS 10, *)) {
