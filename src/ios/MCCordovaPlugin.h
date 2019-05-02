@@ -29,6 +29,10 @@
 #import <Cordova/CDVPlugin.h>
 #import <UIKit/UIKit.h>
 #import "MarketingCloudSDK/MarketingCloudSDK.h"
+#import "MCSwizzler.h"
+
+@interface MCDummyNotificationDelegate : NSObject<UNUserNotificationCenterDelegate>
+@end
 
 @interface MCCordovaPlugin : CDVPlugin
 
@@ -56,12 +60,12 @@
 
 - (void)handleNotification:(CDVInvokedUrlCommand *)command;
 
-+ (void)sendForegroundNotificationReceived:(NSDictionary*)notificationUserInfo;
-+ (void)sendBackgroundNotificationReceived:(NSDictionary*)notificationUserInfo;
-+ (BOOL)isSilentPush:(NSDictionary *)notificationUserInfo;
-
 @property(nonatomic, copy) NSString *eventsCallbackId;
 @property(nonatomic, assign) BOOL notificationOpenedSubscribed;
 @property(nonatomic, strong) NSDictionary *cachedNotification;
+@property (nonatomic, strong) MCSwizzler *appDelegateSwizzler;
+@property (nonatomic, strong) MCSwizzler *notificationDelegateSwizzler;
+@property (nonatomic, strong) MCSwizzler *notificationCenterSwizzler;
+@property (nonatomic, strong) MCDummyNotificationDelegate *dummyNotificationDelegate;
 
 @end
