@@ -31,6 +31,7 @@ cordova plugin add cordova-plugin-marketingcloudsdk
 
 <!-- Optional -->
 <preference name="com.salesforce.marketingcloud.analytics" value="{true|false}" />
+<preference name="com.salesforce.marketingcloud.headup_notifications" value="true" /><!-- Only works on Android 8+ devices -->
 ```
 
 #### 3. Provide FCM credentials
