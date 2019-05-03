@@ -25,14 +25,21 @@
  */
 package com.salesforce.marketingcloud.cordova;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
+import android.os.Build;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.util.Log;
 import com.google.firebase.FirebaseApp;
 import com.salesforce.marketingcloud.MarketingCloudConfig;
 import com.salesforce.marketingcloud.notifications.NotificationCustomizationOptions;
+import com.salesforce.marketingcloud.notifications.NotificationMessage;
+
 import java.io.IOException;
 import java.util.Locale;
 import org.xmlpull.v1.XmlPullParser;
@@ -43,6 +50,9 @@ import static com.salesforce.marketingcloud.cordova.MCCordovaPlugin.TAG;
 public class MCSdkConfig {
 
   private static final String CONFIG_PREFIX = "com.salesforce.marketingcloud.";
+  private static final String HIGH_PRIORITY_NOTIFICATION_CHANNEL_ID = "High priority marketing";
+  private static final String HIGH_PRIORITY_NOTIFICATION_CHANNEL_NAME_FALLBACK = "Marketing";
+  private static final String MC_DEFAULT_CHANNEL_NAME_ID = "mcsdk_default_notification_channel_name";
 
   private MCSdkConfig() {
   }
@@ -62,6 +72,8 @@ public class MCSdkConfig {
 
   static MarketingCloudConfig.Builder parseConfig(Context context, XmlPullParser parser) {
     MarketingCloudConfig.Builder builder = MarketingCloudConfig.builder();
+    int notifId = 0;
+    boolean enableHeadUpNotifications = false;
     boolean senderIdSet = false;
     try {
       while (parser.next() != XmlPullParser.END_DOCUMENT) {
@@ -91,15 +103,14 @@ public class MCSdkConfig {
               builder.setAnalyticsEnabled("true".equalsIgnoreCase(val));
               break;
             case CONFIG_PREFIX + "notification_small_icon":
-              int notifId =
+              notifId =
                   context.getResources().getIdentifier(val, "drawable", context.getPackageName());
-              if (notifId != 0) {
-                builder.setNotificationCustomizationOptions(
-                    NotificationCustomizationOptions.create(notifId));
-              }
               break;
             case CONFIG_PREFIX + "tenant_specific_endpoint":
               builder.setMarketingCloudServerUrl(val);
+              break;
+            case CONFIG_PREFIX + "headup_notifications":
+              enableHeadUpNotifications = "true".equalsIgnoreCase(val);
               break;
           }
         }
@@ -119,6 +130,55 @@ public class MCSdkConfig {
       }
     }
 
+    if (enableHeadUpNotifications) {
+      setUpHeadUpNotifications(context, builder, notifId);
+    } else {
+      setUpBasicNotifications(builder, notifId);
+    }
+
     return builder;
   }
+
+  private static void setUpBasicNotifications(MarketingCloudConfig.Builder builder, int notifId) {
+    if (notifId == 0) { return; }
+    builder.setNotificationCustomizationOptions(NotificationCustomizationOptions.create(notifId));
+  }
+
+  private static void setUpHeadUpNotifications(Context context, MarketingCloudConfig.Builder builder, int notifId) {
+    if (notifId == 0) { return; }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      createHighPriorityNotificationChannel(context);
+      builder.setNotificationCustomizationOptions(
+        NotificationCustomizationOptions.create(notifId, null,
+          new com.salesforce.marketingcloud.notifications.NotificationManager.NotificationChannelIdProvider() {
+            @NonNull
+            @Override
+            public String getNotificationChannelId(@NonNull Context context, @NonNull NotificationMessage notificationMessage) {
+              return HIGH_PRIORITY_NOTIFICATION_CHANNEL_ID;
+            }
+          }));
+    } else {
+      Log.w(TAG, "Head-up notifications are not supported by this plugin running on devices with android 7 or lower");
+      setUpBasicNotifications(builder, notifId);
+    }
+  }
+
+  @RequiresApi(api = Build.VERSION_CODES.O)
+  private static void createHighPriorityNotificationChannel(Context context) {
+    String channelName = HIGH_PRIORITY_NOTIFICATION_CHANNEL_NAME_FALLBACK;
+
+    // Taking if exists, MC notification channel name instead of using a custom one
+    int mcChannelDescriptionId = context.getResources()
+            .getIdentifier(MC_DEFAULT_CHANNEL_NAME_ID, "string", context.getPackageName());
+    if (mcChannelDescriptionId != 0) {
+      channelName = context.getString(mcChannelDescriptionId);
+    }
+
+    NotificationManager notificationManager =
+            (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+      notificationManager.createNotificationChannel(
+              new NotificationChannel(HIGH_PRIORITY_NOTIFICATION_CHANNEL_ID, channelName,
+                      NotificationManager.IMPORTANCE_HIGH));
+  }
+
 }
