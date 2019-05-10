@@ -28,11 +28,19 @@ package com.salesforce.marketingcloud.cordova;
 import android.content.Intent;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.util.Log;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.firebase.messaging.RemoteMessage;
 import com.salesforce.marketingcloud.MCLogListener;
 import com.salesforce.marketingcloud.MarketingCloudSdk;
+import com.salesforce.marketingcloud.messages.push.PushMessageManager;
 import com.salesforce.marketingcloud.notifications.NotificationManager;
 import com.salesforce.marketingcloud.notifications.NotificationMessage;
+
+import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
@@ -44,9 +52,12 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class MCCordovaPlugin extends CordovaPlugin {
+
   static final String TAG = "~!MCCordova";
 
-  private CallbackContext eventsChannel = null;
+  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static boolean IN_BACKGROUND = true;
+  private static CallbackContext eventsChannel = null;
   private PluginResult cachedNotificationOpenedResult = null;
   private boolean notificationOpenedSubscribed = false;
 
@@ -73,11 +84,52 @@ public class MCCordovaPlugin extends CordovaPlugin {
   @Override public void initialize(CordovaInterface cordova, CordovaWebView webView) {
     handleNotificationMessage(
         NotificationManager.extractMessage(cordova.getActivity().getIntent()));
+    IN_BACKGROUND = false;
   }
 
   @Override public void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
     handleNotificationMessage(NotificationManager.extractMessage(intent));
+  }
+
+  @Override
+  public void onPause(boolean multitasking) {
+    IN_BACKGROUND = true;
+  }
+
+  @Override
+  public void onResume(boolean multitasking) {
+    IN_BACKGROUND = false;
+  }
+
+  public static boolean isInBackground() { return IN_BACKGROUND; }
+
+  public static void sendForegroundNotificationReceivedEvent(RemoteMessage message) {
+    sendNotificationReceivedEvent("foregroundNotificationReceived", message);
+  }
+
+  public static void sendBackgroundNotificationReceivedEvent(RemoteMessage message) {
+    sendNotificationReceivedEvent("backgroundNotificationReceived", message);
+  }
+
+  private static void sendNotificationReceivedEvent(String type, RemoteMessage message) {
+    if (eventsChannel == null || !PushMessageManager.isMarketingCloudPush(message)) { return; }
+    try {
+      JSONObject eventArgs = new JSONObject();
+      eventArgs.put("type", type);
+      Map<String, String> messageData = message.getData();
+      if (messageData != null) {
+        eventArgs.put("message", messageData.get("alert"));
+        eventArgs.put("sfcmType", messageData.get("_m"));
+        eventArgs.put("extras", new JSONObject(messageData));
+      }
+      eventArgs.put("timestamp", System.currentTimeMillis());
+      PluginResult result = new PluginResult(PluginResult.Status.OK, eventArgs);
+      result.setKeepCallback(true);
+      eventsChannel.sendPluginResult(result);
+    } catch (Exception e) {
+      // NO_OP
+    }
   }
 
   private void handleNotificationMessage(@Nullable NotificationMessage message) {
@@ -103,8 +155,12 @@ public class MCCordovaPlugin extends CordovaPlugin {
             values.put("type", "openDirect");
             break;
         }
-        eventArgs.put("values", values);
+
         eventArgs.put("type", "notificationOpened");
+        eventArgs.put("message", message.alert());
+        eventArgs.put("sfcmType", message.payload().get("_m"));
+        eventArgs.put("extras", values);
+        eventArgs.put("timestamp", System.currentTimeMillis());
 
         result = new PluginResult(PluginResult.Status.OK, eventArgs);
         result.setKeepCallback(true);
@@ -139,6 +195,7 @@ public class MCCordovaPlugin extends CordovaPlugin {
         } else if (MarketingCloudSdk.isInitializing()) {
           MarketingCloudSdk.requestSdk(new MarketingCloudSdk.WhenReadyListener() {
             @Override public void ready(@NonNull MarketingCloudSdk sdk) {
+              String token = sdk.getPushMessageManager().getPushToken();
               handler.execute(sdk, args, callbackContext);
             }
           });
@@ -227,6 +284,8 @@ public class MCCordovaPlugin extends CordovaPlugin {
         return setContactKey();
       case "getContactKey":
         return getContactKey();
+      case "handleNotification":
+          return handleNotification();
       default:
         return null;
     }
@@ -353,6 +412,37 @@ public class MCCordovaPlugin extends CordovaPlugin {
       @Override
       public void execute(MarketingCloudSdk sdk, JSONArray args, CallbackContext callbackContext) {
         callbackContext.success(sdk.getPushMessageManager().getPushToken());
+      }
+    };
+  }
+
+  private ActionHandler handleNotification() {
+    return new ActionHandler() {
+      @Override
+      public void execute(MarketingCloudSdk sdk, JSONArray args, CallbackContext callbackContext) {
+        JSONObject notification = args.optJSONObject(0);
+        JSONObject notificationData = notification != null ? notification.optJSONObject("extras"): null;
+        Map<String, String> notificationDataMap = null;
+
+        if (notificationData != null) {
+          try {
+            notificationDataMap = MAPPER.readValue(notificationData.toString(), HashMap.class);
+          } catch (IOException e) {
+            Log.e(TAG, "Error reading notification data", e);
+          }
+        }
+
+        if (notificationDataMap == null) {
+          callbackContext.error("No valid notification data");
+          return;
+        }
+
+        boolean handled = sdk.getPushMessageManager().handleMessage(notificationDataMap);
+        if (handled) {
+          callbackContext.success("Salesforce notification handled");
+        } else {
+          callbackContext.error("Error handling notification");
+        }
       }
     };
   }
