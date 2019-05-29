@@ -60,7 +60,7 @@ public class MCSdkConfig {
 
   @Nullable public static MarketingCloudConfig.Builder prepareConfigBuilder(Context context) {
     Resources res = context.getResources();
-    int configId = res.getIdentifier("cordova_config", "xml", context.getPackageName());
+    int configId = res.getIdentifier("mc_salesforce_cordova_config", "xml", context.getPackageName());
 
     if (configId == 0) {
       return null;
