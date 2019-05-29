@@ -5,8 +5,8 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.1.4'
-        classpath 'com.google.gms:google-services:4.1.0'
+        classpath 'com.android.tools.build:gradle:3.3.2'
+        classpath 'com.google.gms:google-services:4.2.0'
     }
 }
 
@@ -26,19 +26,3 @@ dependencies {
     implementation 'com.android.support:support-v4:27.1.1'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.9.8'
 }
-
-cdvPluginPostBuildExtras.push({
-    // we use "AfterEvaluate" to check Gradle plugins when other plugins have already run its own 'postBuildExtras' hook
-    afterEvaluate {
-        def isGServicesPluginAlreadyApplied = false
-        def plugins = getPlugins()
-        if (plugins != null) {
-            isGServicesPluginAlreadyApplied = plugins.find { plugin ->
-                return plugin.toString().contains("com.google.gms.googleservices.GoogleServicesPlugin")
-            }
-        }
-        if (!isGServicesPluginAlreadyApplied) {
-            apply plugin: com.google.gms.googleservices.GoogleServicesPlugin
-        }
-    }
-})
