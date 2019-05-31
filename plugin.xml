@@ -64,10 +64,7 @@
     <header-file src="src/ios/MCCordovaPlugin.h" />
     <source-file src="src/ios/MCCordovaPlugin.m" />
 
-    <resource-file src="src/ios/MarketingCloudSDK/MarketingCloudSDK.bundle" />
-
-    <framework src="src/ios/MarketingCloudSDK/MarketingCloudSDK.framework" custom="true"/>
-    <framework src="CoreLocation.framework/" />
+    <framework src="MarketingCloudSDK" type="podspec" spec="6.0.0"/>
 
   </platform>
 </plugin>
