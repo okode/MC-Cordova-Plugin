@@ -68,34 +68,14 @@ static MCCordovaPlugin *instance;
         // failed to access the MarketingCloudSDK
         os_log_error(OS_LOG_DEFAULT, "Failed to access the MarketingCloudSDK");
     } else {
-        NSDictionary *pluginSettings = self.commandDelegate.settings;
+        NSURL *configurationFileURL = [[NSBundle mainBundle] URLForResource:@"MarketingCloudSDKConfiguration" withExtension:@"json"];
+        NSNumber *configIndex = 0; // index of configuration in the JSON file dictionary
 
-        MarketingCloudSDKConfigBuilder *configBuilder = [MarketingCloudSDKConfigBuilder new];
-        [configBuilder
-            sfmc_setApplicationId:[pluginSettings
-                                      objectForKey:@"com.salesforce.marketingcloud.app_id"]];
-        [configBuilder
-            sfmc_setAccessToken:[pluginSettings
-                                    objectForKey:@"com.salesforce.marketingcloud.access_token"]];
-
-        BOOL analytics =
-            [[pluginSettings objectForKey:@"com.salesforce.marketingcloud.analytics"] boolValue];
-        [configBuilder sfmc_setAnalyticsEnabled:[NSNumber numberWithBool:analytics]];
-
-        NSString *tse =
-            [pluginSettings objectForKey:@"com.salesforce.marketingcloud.tenant_specific_endpoint"];
-        if (tse != nil) {
-            [configBuilder sfmc_setMarketingCloudServerUrl:tse];
-        }
-
-        NSDictionary *dictionary = [[configBuilder sfmc_build] mutableCopy];
-        [dictionary setValue:[pluginSettings
-                              objectForKey:@"com.salesforce.marketingcloud.access_token"] forKey:@"accesstoken"];
-        
         NSError *configError = nil;
         if ([[MarketingCloudSDK sharedInstance]
-                sfmc_configureWithDictionary:dictionary
-                                       error:&configError]) {
+             sfmc_configureWithURL:configurationFileURL
+             configurationIndex:configIndex
+             error:&configError]) {
             [[MarketingCloudSDK sharedInstance] sfmc_addTag:@"Cordova"];
             [self requestPushPermission];
         } else if (configError != nil) {
