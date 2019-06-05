@@ -59,8 +59,6 @@
             <string>remote-notification</string>
         </array>
     </config-file>
-    <header-file src="src/ios/MCSwizzler.h" />
-    <source-file src="src/ios/MCSwizzler.m" />
     <header-file src="src/ios/MCCordovaPlugin.h" />
     <source-file src="src/ios/MCCordovaPlugin.m" />
 

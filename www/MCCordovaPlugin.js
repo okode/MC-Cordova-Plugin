@@ -34,36 +34,6 @@ var argsCheck = require('cordova/argscheck');
 
 var PLUGIN_NAME = 'MCCordovaPlugin';
 
-var onForegroundNotificationReceived;
-var onBackgroundNotificationReceived;
-var onNotificationOpened;
-
-function registerEvents() {
-    var onEventsCallback = function(event) {
-        switch (event.type) {
-            case 'foregroundNotificationReceived':
-                if (onForegroundNotificationReceived !== undefined) {
-                    onForegroundNotificationReceived(event);
-                }
-                break;
-            case 'backgroundNotificationReceived':
-                if (onBackgroundNotificationReceived !== undefined) {
-                    onBackgroundNotificationReceived(event);
-                }
-                break;
-            case 'notificationOpened':
-                if (onNotificationOpened !== undefined) {
-                    onNotificationOpened(event);
-                }
-                break;
-        }
-    };
-
-    _exec(onEventsCallback, null, 'registerEventsChannel');
-}
-
-document.addEventListener('deviceready', registerEvents);
-
 function _exec(successCallback, errorCallback, methodName, args) {
     args = args || [];
     exec(successCallback, errorCallback, PLUGIN_NAME, methodName, args);
@@ -262,78 +232,7 @@ var MCCordovaPlugin = {
         argsCheck.checkArgs(
             'FF', PLUGIN_NAME + '.disableVerboseLogging', arguments);
         _exec(successCallback, errorCallback, 'disableVerboseLogging');
-    },
-    /**
-     *
-     * @param {function(event)} notificationOpenedListener
-     * @param {MCCordovaPlugin~notificationOpenedCallback}
-     *     notificationOpenedListener.event
-     * @since 6.1.0
-     */
-    setOnNotificationOpenedListener: function(notificationOpenedListener) {
-        argsCheck.checkArgs(
-            'f', PLUGIN_NAME + '.setOnNotificationOpenedListener', arguments);
-        onNotificationOpened = notificationOpenedListener;
-        _exec(undefined, undefined, 'subscribe', ['notificationOpened']);
-    },
-
-    /**
-     *
-     * @param {function(event)} listener
-     * @param {MCCordovaPlugin~notificationReceivedCallback}
-     *     listener.event
-     * @since 6.1.0
-     */
-    setOnForegroundNotificationReceivedListener: function(listener) {
-        argsCheck.checkArgs(
-            'f', PLUGIN_NAME + '.setOnForegroundNotificationReceivedListener', arguments);
-        onForegroundNotificationReceived = listener;
-    },
-
-    /**
-     *
-     * @param {function(event)} listener
-     * @param {MCCordovaPlugin~notificationReceivedCallback}
-     *     listener.event
-     * @since 6.1.0
-     */
-    setOnBackgroundNotificationReceivedListener: function(listener) {
-        argsCheck.checkArgs(
-            'f', PLUGIN_NAME + '.setOnBackgroundNotificationReceivedListener', arguments);
-        onBackgroundNotificationReceived = listener;
-    },
-
-    /**
-     *
-     * @param {Object} notification Notification event
-     * @since 6.1.0
-     */
-    handleNotification: function(notification, successCallback, errorCallback) {
-        argsCheck.checkArgs(
-            'off', PLUGIN_NAME + '.handleNotification', arguments);
-        _exec(successCallback, errorCallback, 'handleNotification', [notification]);
     }
-
-    /**
-     * @callback module:MCCordovaPlugin~notificationOpenedCallback
-     * @param {number} timeStamp - Time since epoch when the push message was
-     *     opened.
-     * @param {Object} values - The values of the notification message.
-     * @param {string} values.alert - The alert text of the notification
-     *     message.
-     * @param {string} [values.title] - The title text of the notification
-     *     message.
-     * @param {string} [values.url] - The url associated with the notification
-     *     message. This can be either a cloud-page url or an open-direct url.
-     * @param {string} values.type - Indicates the type of notification message.
-     *     Possible values: 'cloudPage', 'openDirect' or 'other'
-     */
-
-    /**
-     * @callback module:MCCordovaPlugin~notificationReceivedCallback
-     * @param {Object} data - The values of the notification message.
-     */
-
 };
 
 module.exports = MCCordovaPlugin;
