@@ -27,7 +27,6 @@ package com.salesforce.marketingcloud.cordova;
 
 import android.support.annotation.NonNull;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salesforce.marketingcloud.MCLogListener;
 import com.salesforce.marketingcloud.MarketingCloudSdk;
 
@@ -43,8 +42,6 @@ import java.util.Map;
 public class MCCordovaPlugin extends CordovaPlugin {
 
   static final String TAG = "~!MCCordova";
-
-  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static JSONObject fromMap(Map<String, String> map) throws JSONException {
     JSONObject data = new JSONObject();

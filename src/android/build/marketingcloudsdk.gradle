@@ -24,5 +24,4 @@ dependencies {
         exclude group: 'com.android.support', module: 'support-v4'
     }
     implementation 'com.android.support:support-v4:27.1.1'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.9.8'
 }
