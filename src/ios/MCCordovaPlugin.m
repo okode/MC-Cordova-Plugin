@@ -29,10 +29,6 @@
 
 @implementation MCCordovaPlugin
 
-@synthesize eventsCallbackId;
-@synthesize notificationOpenedSubscribed;
-@synthesize cachedNotification;
-
 static MCCordovaPlugin *instance;
 
 - (void)pluginInitialize {
