@@ -51,4 +51,14 @@
 - (void)removeTag:(CDVInvokedUrlCommand *)command;
 - (void)getTags:(CDVInvokedUrlCommand *)command;
 
+- (void)isMarketingCloudPush:(CDVInvokedUrlCommand *)command;
+- (void)notifyPushOpened:(CDVInvokedUrlCommand *)command;
+
+- (void)registerEventsChannel:(CDVInvokedUrlCommand *)command;
+- (void)subscribe:(CDVInvokedUrlCommand *)command;
+
+@property(nonatomic, copy) NSString *eventsCallbackId;
+@property(nonatomic, assign) BOOL notificationOpenedSubscribed;
+@property(nonatomic, strong) NSDictionary *cachedNotification;
+
 @end

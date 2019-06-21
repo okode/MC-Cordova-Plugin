@@ -50,6 +50,32 @@ static MCCordovaPlugin *instance;
         } else if (configError != nil) {
             os_log_debug(OS_LOG_DEFAULT, "%@", configError);
         }
+        
+        [[NSNotificationCenter defaultCenter]
+         addObserverForName:SFMCFoundationUNNotificationReceivedNotification
+         object:nil
+         queue:[NSOperationQueue mainQueue]
+         usingBlock:^(NSNotification *_Nonnull note) {
+             NSMutableDictionary *userInfo =
+             [MCCordovaPlugin dataForNotificationReceived:note];
+             if (userInfo != nil) {
+                 NSString *url = nil;
+                 NSString *type = nil;
+                 if ((url = [userInfo objectForKey:@"_od"])) {
+                     type = @"openDirect";
+                 } else if ((url = [userInfo objectForKey:@"_x"])) {
+                     type = @"cloudPage";
+                 } else {
+                     type = @"other";
+                 }
+                 
+                 if (url != nil) {
+                     [userInfo setValue:url forKey:@"url"];
+                 }
+                 [userInfo setValue:type forKey:@"type"];
+                 [self sendNotificationOpenedEvent:userInfo];
+             }
+         }];
     }
 }
 
@@ -199,6 +225,131 @@ static MCCordovaPlugin *instance;
         sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                                             messageAsArray:(arrayTags != nil) ? arrayTags : @[]]
               callbackId:command.callbackId];
+}
+
+- (void)isMarketingCloudPush:(CDVInvokedUrlCommand *)command {
+    NSDictionary *notificationData = [self getNotificationData:[command.arguments objectAtIndex:0]];
+    if (notificationData == nil) {
+        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR]
+                                    callbackId:command.callbackId];
+        return;
+    }
+    NSString *sfcmParam = notificationData[@"_sid"];
+    if ([sfcmParam isEqualToString:@"SFMC"]) {
+        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK]
+                                   callbackId:command.callbackId];
+    } else {
+        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR]
+                               callbackId:command.callbackId];
+    }
+}
+
+- (void)notifyPushOpened:(CDVInvokedUrlCommand *)command {
+    NSDictionary *notificationData = [self getNotificationData:[command.arguments objectAtIndex:0]];
+    if (notificationData == nil) {
+        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR]
+                                    callbackId:command.callbackId];
+        return;
+    }
+    [[MarketingCloudSDK sharedInstance] sfmc_setNotificationUserInfo:notificationData];
+    [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK]
+                                callbackId:command.callbackId];
+}
+
+- (void)registerEventsChannel:(CDVInvokedUrlCommand *)command {
+    self.eventsCallbackId = command.callbackId;
+    if (self.notificationOpenedSubscribed) {
+        [self sendCachedNotification];
+    }
+}
+
+- (void)subscribe:(CDVInvokedUrlCommand *)command {
+    if (command.arguments != nil && [command.arguments count] > 0) {
+        NSString *eventName = [command.arguments objectAtIndex:0];
+        
+        if ([eventName isEqualToString:@"notificationOpened"]) {
+            self.notificationOpenedSubscribed = YES;
+            if (self.eventsCallbackId != nil) {
+                [self sendCachedNotification];
+            }
+        }
+    }
+}
+
+- (void)sendCachedNotification {
+    if (self.cachedNotification != nil) {
+        [self sendNotificationOpenedEvent:self.cachedNotification];
+        self.cachedNotification = nil;
+    }
+}
+
+- (void)sendNotificationOpenedEvent:(NSDictionary *)userInfo {
+    if (self.notificationOpenedSubscribed) {
+        [MCCordovaPlugin sendNotificationEvent:userInfo withType:@"notificationOpened"];
+    } else {
+        self.cachedNotification = userInfo;
+    }
+}
+
++ (void)sendNotificationEvent:(NSDictionary*)notificationUserInfo withType:(NSString*)type {
+    MCCordovaPlugin *plugin = instance;
+    if (plugin.eventsCallbackId == nil) { return; }
+    NSString *notificationMessage = [MCCordovaPlugin getNotificationMessage: notificationUserInfo];
+    NSString *sfcmType = [MCCordovaPlugin getNotificationSFCMType: notificationUserInfo];
+    NSDictionary *event = @{
+                            @"type" : type,
+                            @"message": notificationMessage ? notificationMessage : [NSNull null],
+                            @"sfcmType": sfcmType ? sfcmType : [NSNull null],
+                            @"extras": notificationUserInfo,
+                            @"timestamp": [NSNumber
+                                           numberWithLong:([[NSDate date] timeIntervalSince1970] * 1000)]
+                            };
+    CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                                            messageAsDictionary:event];
+    [result setKeepCallbackAsBool:YES];
+    [plugin.commandDelegate sendPluginResult:result callbackId:plugin.eventsCallbackId];
+}
+
++ (NSString*) getNotificationMessage:(NSDictionary*)notificationUserInfo {
+    NSString *message = nil;
+    if ([notificationUserInfo[@"aps"][@"alert"] isKindOfClass:[NSString class]]) {
+        message = notificationUserInfo[@"aps"][@"alert"];
+    } else if ([notificationUserInfo[@"aps"][@"alert"] isKindOfClass:[NSDictionary class]]) {
+        message = notificationUserInfo[@"aps"][@"alert"][@"body"];
+    }
+    return message;
+}
+
++ (NSString*) getNotificationSFCMType:(NSDictionary*)notificationUserInfo {
+    return notificationUserInfo[@"_m"];
+}
+
+- (NSDictionary*) getNotificationData:(NSDictionary*)notification {
+    if ([notification objectForKey:@"extras"] != nil) {
+        return notification[@"extras"];
+    }
+    return nil;
+}
+
++ (NSMutableDictionary *_Nullable)dataForNotificationReceived:(NSNotification *)notification {
+    NSMutableDictionary *notificationData = nil;
+    
+    if (notification.userInfo != nil) {
+        if (@available(iOS 10.0, *)) {
+            UNNotificationRequest *userNotificationRequest = [notification.userInfo
+                                                              objectForKey:
+                                                              @"SFMCFoundationUNNotificationReceivedNotificationKeyUNNotificationRequest"];
+            if (userNotificationRequest != nil) {
+                notificationData = [userNotificationRequest.content.userInfo mutableCopy];
+            }
+        }
+        if (notificationData == nil) {
+            NSDictionary *userNotificationUserInfo = [notification.userInfo
+                                                      objectForKey:@"SFMCFoundationNotificationReceivedNotificationKeyUserInfo"];
+            notificationData = [userNotificationUserInfo mutableCopy];
+        }
+    }
+    return notificationData;
 }
 
 @end

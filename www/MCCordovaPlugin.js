@@ -34,6 +34,24 @@ var argsCheck = require('cordova/argscheck');
 
 var PLUGIN_NAME = 'MCCordovaPlugin';
 
+var onNotificationOpened;   
+
+function registerEvents() {    
+    var onEventsCallback = function(event) {    
+        switch (event.type) {   
+            case 'notificationOpened':  
+                if (onNotificationOpened !== undefined) {   
+                    onNotificationOpened(event);    
+                }   
+                break;  
+        }   
+    };  
+
+    _exec(onEventsCallback, null, 'registerEventsChannel');    
+}   
+
+document.addEventListener('deviceready', registerEvents);
+
 function _exec(successCallback, errorCallback, methodName, args) {
     args = args || [];
     exec(successCallback, errorCallback, PLUGIN_NAME, methodName, args);
@@ -232,7 +250,56 @@ var MCCordovaPlugin = {
         argsCheck.checkArgs(
             'FF', PLUGIN_NAME + '.disableVerboseLogging', arguments);
         _exec(successCallback, errorCallback, 'disableVerboseLogging');
+    },
+    /** 
+     *  
+     * @param {Object} notification Notification
+     * @param {function} [successCallback]
+     * @param {function} [errorCallback]
+     * @since 6.1.0
+     */ 
+    isMarketingCloudPush: function(notification, successCallback, errorCallback) {
+        argsCheck.checkArgs(
+            'off', PLUGIN_NAME + '.isMarketingCloudPush', arguments);
+        _exec(successCallback, errorCallback, 'isMarketingCloudPush', [notification]);
+    },
+    /**
+     * @param {Object} notification Notification
+     * @param {function} [successCallback]
+     * @param {function} [errorCallback]
+     * @since 6.1.0 Only Android
+     */ 
+    handleNotification: function(notification, successCallback, errorCallback) {
+        argsCheck.checkArgs(
+            'off', PLUGIN_NAME + '.handleNotification', arguments);
+        _exec(successCallback, errorCallback, 'handleNotification', [notification]);
+    },
+    /** 
+     *  
+     * @param {Object} notification Notification
+     * @param {function} [successCallback]
+     * @param {function} [errorCallback]
+     * @since 6.1.0 Only iOS
+     */ 
+    notifyPushOpened: function(notification) {
+        argsCheck.checkArgs(
+            'o', PLUGIN_NAME + '.notifyPushOpened', arguments);
+        _exec(null, null, 'notifyPushOpened', [notification]);
+    },
+    /** 
+     *  
+     * @param {function(event)} notificationOpenedListener  
+     * @param {MCCordovaPlugin~notificationOpenedCallback}  
+     *     notificationOpenedListener.event 
+     * @since 6.1.0 
+     */ 
+    setOnNotificationOpenedListener: function(notificationOpenedListener) {
+        argsCheck.checkArgs(
+            'f', PLUGIN_NAME + '.setOnNotificationOpenedListener', arguments);
+        onNotificationOpened = notificationOpenedListener;
+        _exec(undefined, undefined, 'subscribe', ['notificationOpened']);
     }
+
 };
 
 module.exports = MCCordovaPlugin;

@@ -25,42 +25,40 @@
  */
 package com.salesforce.marketingcloud.cordova;
 
+import android.content.Intent;
 import android.support.annotation.NonNull;
+import android.util.Log;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salesforce.marketingcloud.MCLogListener;
 import com.salesforce.marketingcloud.MarketingCloudSdk;
+import com.salesforce.marketingcloud.messages.push.PushMessageManager;
+import com.salesforce.marketingcloud.notifications.NotificationManager;
+import com.salesforce.marketingcloud.notifications.NotificationMessage;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
+import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 public class MCCordovaPlugin extends CordovaPlugin {
 
   static final String TAG = "~!MCCordova";
+  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static CallbackContext eventsChannel = null;
+  private PluginResult cachedNotificationOpenedResult = null;
+  private boolean notificationOpenedSubscribed = false;
 
-  private static JSONObject fromMap(Map<String, String> map) throws JSONException {
-    JSONObject data = new JSONObject();
-    if (map != null && !map.isEmpty()) {
-      for (Map.Entry<String, String> entry : map.entrySet()) {
-        data.put(entry.getKey(), entry.getValue());
-      }
-    }
-    return data;
-  }
-
-  private static JSONArray fromCollection(Collection<String> collection) {
-    JSONArray data = new JSONArray();
-    if (collection != null && !collection.isEmpty()) {
-      for (String s : collection) {
-        data.put(s);
-      }
-    }
-    return data;
+  @Override public void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    handleNotificationOpened(NotificationManager.extractMessage(intent));
   }
 
   @Override public boolean execute(final String action, final JSONArray args,
@@ -107,8 +105,41 @@ public class MCCordovaPlugin extends CordovaPlugin {
         MarketingCloudSdk.setLogListener(null);
         callbackContext.success();
         return true;
+      case "registerEventsChannel":
+        registerEventsChannel(callbackContext);
+        return true;
+      case "subscribe":
+        subscribe(args, callbackContext);
+        return true;
       default:
         return false;
+    }
+  }
+
+  private void registerEventsChannel(CallbackContext callbackContext) {
+    this.eventsChannel = callbackContext;
+    if (notificationOpenedSubscribed) {
+      sendCachedPushEvent(eventsChannel);
+    }
+  }
+
+  private void subscribe(JSONArray args, CallbackContext context) {
+    switch (args.optString(0, null)) {
+      case "notificationOpened":
+        notificationOpenedSubscribed = true;
+        if (eventsChannel != null) {
+          sendCachedPushEvent(eventsChannel);
+        }
+        break;
+      default:
+        // NO_OP
+    }
+  }
+
+  private void sendCachedPushEvent(CallbackContext callbackContext) {
+    if (cachedNotificationOpenedResult != null) {
+      callbackContext.sendPluginResult(cachedNotificationOpenedResult);
+      cachedNotificationOpenedResult = null;
     }
   }
 
@@ -138,6 +169,10 @@ public class MCCordovaPlugin extends CordovaPlugin {
         return setContactKey();
       case "getContactKey":
         return getContactKey();
+      case "isMarketingCloudPush":
+        return isMarketingCloudPush();
+      case "handleNotification":
+        return handleNotification();
       default:
         return null;
     }
@@ -266,6 +301,121 @@ public class MCCordovaPlugin extends CordovaPlugin {
         callbackContext.success(sdk.getPushMessageManager().getPushToken());
       }
     };
+  }
+
+  private ActionHandler isMarketingCloudPush() {
+    return new ActionHandler() {
+      @Override
+      public void execute(MarketingCloudSdk sdk, JSONArray args, CallbackContext callbackContext) {
+        Map<String, String> notificationData = getNotificationData(args.optJSONObject(0));
+        if (notificationData == null) {
+          callbackContext.error("No notification data");
+          return;
+        }
+        if (PushMessageManager.isMarketingCloudPush(notificationData)) {
+          callbackContext.success();
+        } else {
+          callbackContext.error("No marketing cloud push");
+        }
+      }
+    };
+  }
+
+  private ActionHandler handleNotification() {
+    return new ActionHandler() {
+      @Override
+      public void execute(MarketingCloudSdk sdk, JSONArray args, CallbackContext callbackContext) {
+        Map<String, String> notificationData = getNotificationData(args.optJSONObject(0));
+        if (notificationData == null) {
+          callbackContext.error("No valid notification data");
+          return;
+        }
+
+        boolean handled = sdk.getPushMessageManager().handleMessage(notificationData);
+        if (handled) {
+          callbackContext.success();
+        } else {
+          callbackContext.error("Error handling notification");
+        }
+      }
+    };
+  }
+
+  private Map<String, String> getNotificationData(JSONObject notification) {
+    if (notification == null) { return null; }
+    JSONObject notificationData = notification != null ? notification.optJSONObject("extras"): null;
+    Map<String, String> notificationDataMap = null;
+    if (notificationData != null) {
+      try {
+        notificationDataMap = MAPPER.readValue(notificationData.toString(), HashMap.class);
+      } catch (IOException e) {
+        Log.e(TAG, "Error reading notification data", e);
+      }
+    }
+    return notificationDataMap;
+  }
+
+  private static JSONObject fromMap(Map<String, String> map) throws JSONException {
+    JSONObject data = new JSONObject();
+    if (map != null && !map.isEmpty()) {
+      for (Map.Entry<String, String> entry : map.entrySet()) {
+        data.put(entry.getKey(), entry.getValue());
+      }
+    }
+    return data;
+  }
+
+  private static JSONArray fromCollection(Collection<String> collection) {
+    JSONArray data = new JSONArray();
+    if (collection != null && !collection.isEmpty()) {
+      for (String s : collection) {
+        data.put(s);
+      }
+    }
+    return data;
+  }
+
+  private void handleNotificationOpened(NotificationMessage message) {
+    if (message != null) {
+      // Open from push
+      PluginResult result;
+
+      try {
+        JSONObject eventArgs = new JSONObject();
+        eventArgs.put("timeStamp", System.currentTimeMillis());
+        JSONObject values = new JSONObject(message.payload());
+        if (message.url() != null) {
+          values.put("url", message.url());
+        }
+        switch (message.type()) {
+          case OTHER:
+            values.put("type", "other");
+            break;
+          case CLOUD_PAGE:
+            values.put("type", "cloudPage");
+            break;
+          case OPEN_DIRECT:
+            values.put("type", "openDirect");
+            break;
+        }
+
+        eventArgs.put("type", "notificationOpened");
+        eventArgs.put("message", message.alert());
+        eventArgs.put("sfcmType", message.payload().get("_m"));
+        eventArgs.put("extras", values);
+        eventArgs.put("timestamp", System.currentTimeMillis());
+        result = new PluginResult(PluginResult.Status.OK, eventArgs);
+        result.setKeepCallback(true);
+
+        if (eventsChannel != null && notificationOpenedSubscribed) {
+          eventsChannel.sendPluginResult(result);
+        } else {
+          cachedNotificationOpenedResult = result;
+        }
+      } catch (Exception e) {
+        // NO_OP
+      }
+    }
   }
 
   interface ActionHandler {
