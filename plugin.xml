@@ -32,6 +32,7 @@
     <config-file parent="/*" target="res/xml/config.xml">
       <feature name="MCCordovaPlugin">
         <param name="android-package" value="com.salesforce.marketingcloud.cordova.MCCordovaPlugin" />
+        <param name="onload" value="true"/>
       </feature>
     </config-file>
 
