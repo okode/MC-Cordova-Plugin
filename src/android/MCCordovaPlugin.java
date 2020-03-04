@@ -82,14 +82,13 @@ public class MCCordovaPlugin extends CordovaPlugin {
   }
 
   @Override public void initialize(CordovaInterface cordova, CordovaWebView webView) {
-    handleNotificationMessage(
-        NotificationManager.extractMessage(cordova.getActivity().getIntent()));
+    handleNotificationOpened(MCSdkConfig.extractMessage(cordova.getActivity().getIntent()));
     IN_BACKGROUND = false;
   }
 
   @Override public void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
-    handleNotificationMessage(NotificationManager.extractMessage(intent));
+    handleNotificationOpened(MCSdkConfig.extractMessage(intent));
   }
 
   @Override
