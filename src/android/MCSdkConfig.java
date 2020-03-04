@@ -26,7 +26,9 @@
 package com.salesforce.marketingcloud.cordova;
 
 import android.app.NotificationChannel;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
 import android.os.Build;
@@ -54,6 +56,7 @@ public class MCSdkConfig {
   private static final String HIGH_PRIORITY_NOTIFICATION_CHANNEL_ID = "High priority marketing";
   private static final String HIGH_PRIORITY_NOTIFICATION_CHANNEL_NAME_FALLBACK = "Marketing";
   private static final String MC_DEFAULT_CHANNEL_NAME_ID = "mcsdk_default_notification_channel_name";
+  private static final String MC_NOTIFICATION_EXTRA_MESSAGE = "mcsdk_notification_extra_message";
 
   private MCSdkConfig() {
   }
@@ -172,6 +175,8 @@ public class MCSdkConfig {
             );
             builder.setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setDefaults(android.app.Notification.DEFAULT_VIBRATE);
+
+            builder.setContentIntent(NotificationManager.redirectIntentForAnalytics(context, createOpenIntent(context, notificationMessage), notificationMessage, true));
             return builder;
           }
         })
@@ -195,6 +200,23 @@ public class MCSdkConfig {
       notificationManager.createNotificationChannel(
               new NotificationChannel(HIGH_PRIORITY_NOTIFICATION_CHANNEL_ID, channelName,
                       android.app.NotificationManager.IMPORTANCE_HIGH));
+  }
+
+  private static PendingIntent createOpenIntent(Context context, NotificationMessage notificationMessage) {
+    Intent intent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+    if (intent != null) {
+      intent.putExtra(MCSdkConfig.MC_NOTIFICATION_EXTRA_MESSAGE, notificationMessage);
+      intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+      return PendingIntent.getActivity(context, notificationMessage.notificationId(), intent, PendingIntent.FLAG_CANCEL_CURRENT);
+    } else {
+      return null;
+    }
+  }
+
+  public static NotificationMessage extractMessage(Intent intent) {
+    if (intent == null) { return null; }
+    return intent.hasExtra(MC_NOTIFICATION_EXTRA_MESSAGE) ?
+            intent.getParcelableExtra(MC_NOTIFICATION_EXTRA_MESSAGE) : NotificationManager.extractMessage(intent);
   }
 
 }

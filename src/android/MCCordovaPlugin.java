@@ -33,7 +33,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salesforce.marketingcloud.MCLogListener;
 import com.salesforce.marketingcloud.MarketingCloudSdk;
 import com.salesforce.marketingcloud.messages.push.PushMessageManager;
-import com.salesforce.marketingcloud.notifications.NotificationManager;
 import com.salesforce.marketingcloud.notifications.NotificationMessage;
 
 import org.apache.cordova.CallbackContext;
@@ -58,11 +57,10 @@ public class MCCordovaPlugin extends CordovaPlugin {
 
   @Override public void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
-    handleNotificationOpened(NotificationManager.extractMessage(intent));
+    handleNotificationOpened(MCSdkConfig.extractMessage(intent));
   }
 
-  @Override public boolean execute(final String action, final JSONArray args,
-      final CallbackContext callbackContext) throws JSONException {
+  @Override public boolean execute(final String action, final JSONArray args, final CallbackContext callbackContext) {
     if (handleStaticAction(action, args, callbackContext)) {
       return true;
     }
